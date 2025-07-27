@@ -8,7 +8,9 @@ import Flights from "./pages/Flights";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import Bookings from "./pages/Bookings";
+import BookingDetails from "./pages/BookingDetails";
 import NotFound from "./pages/NotFound";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -20,10 +22,23 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Home />} />
-          <Route path="/flights" element={<Flights />} />
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/bookings" element={<Bookings />} />
+          <Route path="/flights" element={
+            <ProtectedRoute>
+              <Flights />
+            </ProtectedRoute>
+          } />
+          <Route path="/bookings" element={
+            <ProtectedRoute>
+              <Bookings />
+            </ProtectedRoute>
+          } />
+          <Route path="/booking/:bookingId" element={
+            <ProtectedRoute>
+              <BookingDetails />
+            </ProtectedRoute>
+          } />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

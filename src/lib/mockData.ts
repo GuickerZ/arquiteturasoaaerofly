@@ -232,7 +232,31 @@ export const mockAPI = {
     
     getById: async (id: string): Promise<Booking | null> => {
       await new Promise(resolve => setTimeout(resolve, 500));
-      return mockBookings.find(b => b.id === id) || null;
+      const booking = mockBookings.find(b => b.id === id);
+      if (!booking) {
+        // Criar uma reserva mock se não encontrar
+        return {
+          id,
+          userId: 'user1',
+          flights: [],
+          passengers: [
+            {
+              id: 'pass1',
+              name: 'João Silva',
+              document: '123.456.789-00',
+              dateOfBirth: '1990-05-15',
+              nationality: 'Brasileira',
+              seatNumber: '12A'
+            }
+          ],
+          totalPrice: 450,
+          currency: 'BRL',
+          status: 'confirmed',
+          bookingDate: '2024-01-15',
+          paymentMethod: 'Cartão de Crédito'
+        };
+      }
+      return booking;
     }
   },
 
