@@ -14,7 +14,316 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      airlines: {
+        Row: {
+          code: string
+          created_at: string | null
+          id: string
+          logo_url: string | null
+          name: string
+          updated_at: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          name: string
+          updated_at?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string | null
+          id?: string
+          logo_url?: string | null
+          name?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      airports: {
+        Row: {
+          city: string
+          code: string
+          country: string
+          created_at: string | null
+          id: string
+          name: string
+          timezone: string
+          updated_at: string | null
+        }
+        Insert: {
+          city: string
+          code: string
+          country: string
+          created_at?: string | null
+          id?: string
+          name: string
+          timezone: string
+          updated_at?: string | null
+        }
+        Update: {
+          city?: string
+          code?: string
+          country?: string
+          created_at?: string | null
+          id?: string
+          name?: string
+          timezone?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      bookings: {
+        Row: {
+          booking_date: string | null
+          booking_reference: string
+          created_at: string | null
+          flight_id: string
+          id: string
+          passengers_count: number
+          status: Database["public"]["Enums"]["booking_status"] | null
+          total_price: number
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          booking_date?: string | null
+          booking_reference: string
+          created_at?: string | null
+          flight_id: string
+          id?: string
+          passengers_count?: number
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_price: number
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          booking_date?: string | null
+          booking_reference?: string
+          created_at?: string | null
+          flight_id?: string
+          id?: string
+          passengers_count?: number
+          status?: Database["public"]["Enums"]["booking_status"] | null
+          total_price?: number
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bookings_flight_id_fkey"
+            columns: ["flight_id"]
+            isOneToOne: false
+            referencedRelation: "flights"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flights: {
+        Row: {
+          aircraft_type: string | null
+          airline_id: string
+          arrival_time: string
+          available_seats: number
+          created_at: string | null
+          departure_time: string
+          destination_airport_id: string
+          flight_number: string
+          id: string
+          origin_airport_id: string
+          price: number
+          status: Database["public"]["Enums"]["flight_status"] | null
+          total_seats: number
+          updated_at: string | null
+        }
+        Insert: {
+          aircraft_type?: string | null
+          airline_id: string
+          arrival_time: string
+          available_seats?: number
+          created_at?: string | null
+          departure_time: string
+          destination_airport_id: string
+          flight_number: string
+          id?: string
+          origin_airport_id: string
+          price: number
+          status?: Database["public"]["Enums"]["flight_status"] | null
+          total_seats?: number
+          updated_at?: string | null
+        }
+        Update: {
+          aircraft_type?: string | null
+          airline_id?: string
+          arrival_time?: string
+          available_seats?: number
+          created_at?: string | null
+          departure_time?: string
+          destination_airport_id?: string
+          flight_number?: string
+          id?: string
+          origin_airport_id?: string
+          price?: number
+          status?: Database["public"]["Enums"]["flight_status"] | null
+          total_seats?: number
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flights_airline_id_fkey"
+            columns: ["airline_id"]
+            isOneToOne: false
+            referencedRelation: "airlines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_destination_airport_id_fkey"
+            columns: ["destination_airport_id"]
+            isOneToOne: false
+            referencedRelation: "airports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flights_origin_airport_id_fkey"
+            columns: ["origin_airport_id"]
+            isOneToOne: false
+            referencedRelation: "airports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      passengers: {
+        Row: {
+          birth_date: string
+          booking_id: string
+          created_at: string | null
+          document: string
+          full_name: string
+          id: string
+          nationality: string | null
+          seat_number: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          birth_date: string
+          booking_id: string
+          created_at?: string | null
+          document: string
+          full_name: string
+          id?: string
+          nationality?: string | null
+          seat_number?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          birth_date?: string
+          booking_id?: string
+          created_at?: string | null
+          document?: string
+          full_name?: string
+          id?: string
+          nationality?: string | null
+          seat_number?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "passengers_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      payments: {
+        Row: {
+          amount: number
+          booking_id: string
+          created_at: string | null
+          id: string
+          method: Database["public"]["Enums"]["payment_method"]
+          paid_at: string | null
+          pix_code: string | null
+          pix_expires_at: string | null
+          status: Database["public"]["Enums"]["payment_status"] | null
+          transaction_id: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          amount: number
+          booking_id: string
+          created_at?: string | null
+          id?: string
+          method: Database["public"]["Enums"]["payment_method"]
+          paid_at?: string | null
+          pix_code?: string | null
+          pix_expires_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          transaction_id?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          amount?: number
+          booking_id?: string
+          created_at?: string | null
+          id?: string
+          method?: Database["public"]["Enums"]["payment_method"]
+          paid_at?: string | null
+          pix_code?: string | null
+          pix_expires_at?: string | null
+          status?: Database["public"]["Enums"]["payment_status"] | null
+          transaction_id?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "payments_booking_id_fkey"
+            columns: ["booking_id"]
+            isOneToOne: false
+            referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          birth_date: string | null
+          created_at: string | null
+          document: string | null
+          full_name: string | null
+          id: string
+          nationality: string | null
+          phone: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          birth_date?: string | null
+          created_at?: string | null
+          document?: string | null
+          full_name?: string | null
+          id?: string
+          nationality?: string | null
+          phone?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          birth_date?: string | null
+          created_at?: string | null
+          document?: string | null
+          full_name?: string | null
+          id?: string
+          nationality?: string | null
+          phone?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -23,7 +332,21 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      booking_status: "pending" | "confirmed" | "cancelled" | "completed"
+      flight_status:
+        | "scheduled"
+        | "boarding"
+        | "departed"
+        | "arrived"
+        | "cancelled"
+        | "delayed"
+      payment_method: "pix" | "credit_card" | "debit_card" | "bank_transfer"
+      payment_status:
+        | "pending"
+        | "processing"
+        | "completed"
+        | "failed"
+        | "cancelled"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +473,24 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      booking_status: ["pending", "confirmed", "cancelled", "completed"],
+      flight_status: [
+        "scheduled",
+        "boarding",
+        "departed",
+        "arrived",
+        "cancelled",
+        "delayed",
+      ],
+      payment_method: ["pix", "credit_card", "debit_card", "bank_transfer"],
+      payment_status: [
+        "pending",
+        "processing",
+        "completed",
+        "failed",
+        "cancelled",
+      ],
+    },
   },
 } as const
