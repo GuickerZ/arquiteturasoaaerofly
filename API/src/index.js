@@ -1,10 +1,10 @@
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
-require('dotenv').config();
 
 // Import routes
 const authRoutes = require('./routes/auth');
@@ -16,6 +16,7 @@ const userRoutes = require('./routes/users');
 // Import middleware
 const errorHandler = require('./middleware/errorHandler');
 const logger = require('./utils/logger');
+const { testConnection } = require('./config/supabase');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -46,12 +47,14 @@ app.use(morgan('combined', {
 }));
 
 // Health check endpoint
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const supabaseStatus = await testConnection();
   res.status(200).json({
     status: 'OK',
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
-    environment: process.env.NODE_ENV
+    environment: process.env.NODE_ENV,
+    database: supabaseStatus ? 'Connected' : 'Disconnected'
   });
 });
 
@@ -79,6 +82,7 @@ app.listen(PORT, () => {
   logger.info(`🚀 AeroFly API Server running on port ${PORT}`);
   logger.info(`📊 Environment: ${process.env.NODE_ENV}`);
   logger.info(`🔗 API URL: http://localhost:${PORT}`);
+  logger.info(`💾 Database: Supabase Integration`);
 });
 
 module.exports = app;

@@ -1,4 +1,4 @@
-const { pool } = require('../config/database');
+const { supabase } = require('../config/supabase');
 const { paginate, getPaginationMeta } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -20,70 +20,61 @@ class FlightService {
       
       const { limit: queryLimit, offset } = paginate(page, limit);
       
-      let query = `
-        SELECT 
-          f.id,
-          f.flight_number,
-          f.departure_time,
-          f.arrival_time,
-          f.price,
-          f.available_seats,
-          f.total_seats,
-          f.status,
-          f.aircraft_type,
-          a.name as airline_name,
-          a.code as airline_code,
-          a.logo_url as airline_logo,
-          orig.name as origin_airport,
-          orig.code as origin_code,
-          orig.city as origin_city,
-          dest.name as destination_airport,
-          dest.code as destination_code,
-          dest.city as destination_city
-        FROM public.flights f
-        JOIN public.airlines a ON f.airline_id = a.id
-        JOIN public.airports orig ON f.origin_airport_id = orig.id
-        JOIN public.airports dest ON f.destination_airport_id = dest.id
-        WHERE 
-          orig.code = $1 
-          AND dest.code = $2 
-          AND DATE(f.departure_time) = $3
-          AND f.available_seats >= $4
-          AND f.status = 'scheduled'
-        ORDER BY f.departure_time ASC
-        LIMIT $5 OFFSET $6
-      `;
+      // Search flights with joins using Supabase
+      const { data: flights, error: flightsError, count } = await supabase
+        .from('flights')
+        .select(`
+          id,
+          flight_number,
+          departure_time,
+          arrival_time,
+          price,
+          available_seats,
+          total_seats,
+          status,
+          aircraft_type,
+          airlines!inner(name, code, logo_url),
+          origin_airports:airports!flights_origin_airport_id_fkey(name, code, city),
+          destination_airports:airports!flights_destination_airport_id_fkey(name, code, city)
+        `, { count: 'exact' })
+        .eq('origin_airports.code', origin)
+        .eq('destination_airports.code', destination)
+        .gte('departure_time', departureDate + 'T00:00:00')
+        .lt('departure_time', departureDate + 'T23:59:59')
+        .gte('available_seats', passengers)
+        .eq('status', 'scheduled')
+        .order('departure_time', { ascending: true })
+        .range(offset, offset + queryLimit - 1);
       
-      const countQuery = `
-        SELECT COUNT(*) as total
-        FROM public.flights f
-        JOIN public.airports orig ON f.origin_airport_id = orig.id
-        JOIN public.airports dest ON f.destination_airport_id = dest.id
-        WHERE 
-          orig.code = $1 
-          AND dest.code = $2 
-          AND DATE(f.departure_time) = $3
-          AND f.available_seats >= $4
-          AND f.status = 'scheduled'
-      `;
+      if (flightsError) {
+        throw new Error(`Flight search failed: ${flightsError.message}`);
+      }
       
-      const params = [origin, destination, departureDate, passengers, queryLimit, offset];
-      const countParams = [origin, destination, departureDate, passengers];
-      
-      const [flightsResult, countResult] = await Promise.all([
-        pool.query(query, params),
-        pool.query(countQuery, countParams)
-      ]);
-      
-      const flights = flightsResult.rows.map(flight => ({
-        ...flight,
+      const formattedFlights = flights.map(flight => ({
+        id: flight.id,
+        flight_number: flight.flight_number,
+        departure_time: flight.departure_time,
+        arrival_time: flight.arrival_time,
+        price: flight.price,
+        available_seats: flight.available_seats,
+        total_seats: flight.total_seats,
+        status: flight.status,
+        aircraft_type: flight.aircraft_type,
+        airline_name: flight.airlines.name,
+        airline_code: flight.airlines.code,
+        airline_logo: flight.airlines.logo_url,
+        origin_airport: flight.origin_airports.name,
+        origin_code: flight.origin_airports.code,
+        origin_city: flight.origin_airports.city,
+        destination_airport: flight.destination_airports.name,
+        destination_code: flight.destination_airports.code,
+        destination_city: flight.destination_airports.city,
         duration: this.calculateDuration(flight.departure_time, flight.arrival_time)
       }));
       
-      const total = parseInt(countResult.rows[0].total);
-      const meta = getPaginationMeta(total, page, limit);
+      const meta = getPaginationMeta(count || 0, page, limit);
       
-      return { flights, meta };
+      return { flights: formattedFlights, meta };
       
     } catch (error) {
       logger.error('Flight search error:', error);
@@ -96,40 +87,48 @@ class FlightService {
    */
   async getFlightById(flightId) {
     try {
-      const result = await pool.query(`
-        SELECT 
-          f.id,
-          f.flight_number,
-          f.departure_time,
-          f.arrival_time,
-          f.price,
-          f.available_seats,
-          f.total_seats,
-          f.status,
-          f.aircraft_type,
-          a.name as airline_name,
-          a.code as airline_code,
-          a.logo_url as airline_logo,
-          orig.name as origin_airport,
-          orig.code as origin_code,
-          orig.city as origin_city,
-          dest.name as destination_airport,
-          dest.code as destination_code,
-          dest.city as destination_city
-        FROM public.flights f
-        JOIN public.airlines a ON f.airline_id = a.id
-        JOIN public.airports orig ON f.origin_airport_id = orig.id
-        JOIN public.airports dest ON f.destination_airport_id = dest.id
-        WHERE f.id = $1
-      `, [flightId]);
+      const { data: flight, error } = await supabase
+        .from('flights')
+        .select(`
+          id,
+          flight_number,
+          departure_time,
+          arrival_time,
+          price,
+          available_seats,
+          total_seats,
+          status,
+          aircraft_type,
+          airlines!inner(name, code, logo_url),
+          origin_airports:airports!flights_origin_airport_id_fkey(name, code, city),
+          destination_airports:airports!flights_destination_airport_id_fkey(name, code, city)
+        `)
+        .eq('id', flightId)
+        .single();
       
-      if (result.rows.length === 0) {
+      if (error) {
         throw new Error('Flight not found');
       }
       
-      const flight = result.rows[0];
       return {
-        ...flight,
+        id: flight.id,
+        flight_number: flight.flight_number,
+        departure_time: flight.departure_time,
+        arrival_time: flight.arrival_time,
+        price: flight.price,
+        available_seats: flight.available_seats,
+        total_seats: flight.total_seats,
+        status: flight.status,
+        aircraft_type: flight.aircraft_type,
+        airline_name: flight.airlines.name,
+        airline_code: flight.airlines.code,
+        airline_logo: flight.airlines.logo_url,
+        origin_airport: flight.origin_airports.name,
+        origin_code: flight.origin_airports.code,
+        origin_city: flight.origin_airports.city,
+        destination_airport: flight.destination_airports.name,
+        destination_code: flight.destination_airports.code,
+        destination_city: flight.destination_airports.city,
         duration: this.calculateDuration(flight.departure_time, flight.arrival_time)
       };
       
@@ -144,13 +143,16 @@ class FlightService {
    */
   async getAirports() {
     try {
-      const result = await pool.query(`
-        SELECT id, name, code, city, country
-        FROM public.airports
-        ORDER BY city ASC
-      `);
+      const { data: airports, error } = await supabase
+        .from('airports')
+        .select('id, name, code, city, country')
+        .order('city', { ascending: true });
       
-      return result.rows;
+      if (error) {
+        throw new Error(`Failed to get airports: ${error.message}`);
+      }
+      
+      return airports;
       
     } catch (error) {
       logger.error('Get airports error:', error);
@@ -163,25 +165,47 @@ class FlightService {
    */
   async getPopularRoutes(limit = 10) {
     try {
-      const result = await pool.query(`
-        SELECT 
-          orig.code as origin_code,
-          orig.city as origin_city,
-          dest.code as destination_code,
-          dest.city as destination_city,
-          COUNT(*) as booking_count,
-          MIN(f.price) as min_price
-        FROM public.bookings b
-        JOIN public.flights f ON b.flight_id = f.id
-        JOIN public.airports orig ON f.origin_airport_id = orig.id
-        JOIN public.airports dest ON f.destination_airport_id = dest.id
-        WHERE b.status IN ('confirmed', 'completed')
-        GROUP BY orig.code, orig.city, dest.code, dest.city
-        ORDER BY booking_count DESC
-        LIMIT $1
-      `, [limit]);
+      const { data: routes, error } = await supabase
+        .from('bookings')
+        .select(`
+          flights!inner(
+            origin_airports:airports!flights_origin_airport_id_fkey(code, city),
+            destination_airports:airports!flights_destination_airport_id_fkey(code, city),
+            price
+          )
+        `)
+        .in('status', ['confirmed', 'completed']);
       
-      return result.rows;
+      if (error) {
+        throw new Error(`Failed to get popular routes: ${error.message}`);
+      }
+      
+      // Group by route and calculate statistics
+      const routeStats = {};
+      routes.forEach(booking => {
+        const flight = booking.flights;
+        const routeKey = `${flight.origin_airports.code}-${flight.destination_airports.code}`;
+        
+        if (!routeStats[routeKey]) {
+          routeStats[routeKey] = {
+            origin_code: flight.origin_airports.code,
+            origin_city: flight.origin_airports.city,
+            destination_code: flight.destination_airports.code,
+            destination_city: flight.destination_airports.city,
+            booking_count: 0,
+            min_price: flight.price
+          };
+        }
+        
+        routeStats[routeKey].booking_count++;
+        if (flight.price < routeStats[routeKey].min_price) {
+          routeStats[routeKey].min_price = flight.price;
+        }
+      });
+      
+      return Object.values(routeStats)
+        .sort((a, b) => b.booking_count - a.booking_count)
+        .slice(0, limit);
       
     } catch (error) {
       logger.error('Get popular routes error:', error);
@@ -203,19 +227,19 @@ class FlightService {
    */
   async updateFlightStatus(flightId, status) {
     try {
-      const result = await pool.query(`
-        UPDATE public.flights 
-        SET status = $1, updated_at = NOW()
-        WHERE id = $2
-        RETURNING id, flight_number, status
-      `, [status, flightId]);
+      const { data, error } = await supabase
+        .from('flights')
+        .update({ status })
+        .eq('id', flightId)
+        .select('id, flight_number, status')
+        .single();
       
-      if (result.rows.length === 0) {
+      if (error) {
         throw new Error('Flight not found');
       }
       
       logger.info('Flight status updated', { flightId, status });
-      return result.rows[0];
+      return data;
       
     } catch (error) {
       logger.error('Update flight status error:', error);
@@ -228,17 +252,17 @@ class FlightService {
    */
   async checkSeatAvailability(flightId, requiredSeats) {
     try {
-      const result = await pool.query(`
-        SELECT available_seats
-        FROM public.flights
-        WHERE id = $1
-      `, [flightId]);
+      const { data, error } = await supabase
+        .from('flights')
+        .select('available_seats')
+        .eq('id', flightId)
+        .single();
       
-      if (result.rows.length === 0) {
+      if (error) {
         throw new Error('Flight not found');
       }
       
-      return result.rows[0].available_seats >= requiredSeats;
+      return data.available_seats >= requiredSeats;
       
     } catch (error) {
       logger.error('Check seat availability error:', error);

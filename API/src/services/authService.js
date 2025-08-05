@@ -1,4 +1,4 @@
-const { pool } = require('../config/database');
+const { supabase } = require('../config/supabase');
 const { hashPassword, comparePassword, generateToken } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -7,42 +7,40 @@ class AuthService {
    * Register a new user
    */
   async register(userData) {
-    const client = await pool.connect();
-    
     try {
-      await client.query('BEGIN');
-      
       const { email, password, fullName, document, phone, birthDate } = userData;
       
-      // Check if user already exists
-      const existingUser = await client.query(
-        'SELECT id FROM auth.users WHERE email = $1',
-        [email]
-      );
+      // Use Supabase Auth to create user
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName
+          }
+        }
+      });
       
-      if (existingUser.rows.length > 0) {
-        throw new Error('User already exists with this email');
+      if (authError) {
+        throw new Error(authError.message);
       }
       
-      // Hash password
-      const hashedPassword = await hashPassword(password);
+      const user = authData.user;
       
-      // Insert user into auth.users (simulating Supabase auth)
-      const userResult = await client.query(`
-        INSERT INTO auth.users (id, email, encrypted_password, email_confirmed_at, created_at, updated_at)
-        VALUES (gen_random_uuid(), $1, $2, NOW(), NOW(), NOW())
-        RETURNING id, email, created_at
-      `, [email, hashedPassword]);
+      // Insert profile using Supabase client
+      const { error: profileError } = await supabase
+        .from('profiles')
+        .insert({
+          user_id: user.id,
+          full_name: fullName,
+          document,
+          phone,
+          birth_date: birthDate
+        });
       
-      const user = userResult.rows[0];
-      
-      // Insert profile
-      await client.query(`
-        INSERT INTO public.profiles (user_id, full_name, document, phone, birth_date)
-        VALUES ($1, $2, $3, $4, $5)
-      `, [user.id, fullName, document, phone, birthDate]);
-      
-      await client.query('COMMIT');
+      if (profileError) {
+        throw new Error(`Profile creation failed: ${profileError.message}`);
+      }
       
       // Generate token
       const token = generateToken({ userId: user.id, email: user.email });
@@ -60,11 +58,8 @@ class AuthService {
       };
       
     } catch (error) {
-      await client.query('ROLLBACK');
       logger.error('Registration error:', error);
       throw error;
-    } finally {
-      client.release();
     }
   }
   
@@ -73,31 +68,27 @@ class AuthService {
    */
   async login(email, password) {
     try {
-      // Get user with profile data
-      const result = await pool.query(`
-        SELECT 
-          u.id, 
-          u.email, 
-          u.encrypted_password,
-          p.full_name,
-          p.document,
-          p.phone,
-          p.birth_date
-        FROM auth.users u
-        LEFT JOIN public.profiles p ON u.id = p.user_id
-        WHERE u.email = $1
-      `, [email]);
+      // Use Supabase Auth to sign in
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      if (result.rows.length === 0) {
+      if (authError) {
         throw new Error('Invalid email or password');
       }
       
-      const user = result.rows[0];
+      const user = authData.user;
       
-      // Compare password
-      const isValidPassword = await comparePassword(password, user.encrypted_password);
-      if (!isValidPassword) {
-        throw new Error('Invalid email or password');
+      // Get profile data
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', user.id)
+        .single();
+      
+      if (profileError && profileError.code !== 'PGRST116') {
+        logger.error('Profile fetch error:', profileError);
       }
       
       // Generate token
@@ -109,10 +100,10 @@ class AuthService {
         user: {
           id: user.id,
           email: user.email,
-          fullName: user.full_name,
-          document: user.document,
-          phone: user.phone,
-          birthDate: user.birth_date
+          fullName: profileData?.full_name,
+          document: profileData?.document,
+          phone: profileData?.phone,
+          birthDate: profileData?.birth_date
         },
         token
       };
@@ -128,21 +119,14 @@ class AuthService {
    */
   async refreshToken(userId) {
     try {
-      const result = await pool.query(`
-        SELECT 
-          u.id, 
-          u.email,
-          p.full_name
-        FROM auth.users u
-        LEFT JOIN public.profiles p ON u.id = p.user_id
-        WHERE u.id = $1
-      `, [userId]);
+      // Get user from Supabase Auth
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
       
-      if (result.rows.length === 0) {
+      if (userError || !userData.user) {
         throw new Error('User not found');
       }
       
-      const user = result.rows[0];
+      const user = userData.user;
       const token = generateToken({ userId: user.id, email: user.email });
       
       return { token };
@@ -158,21 +142,14 @@ class AuthService {
    */
   async requestPasswordReset(email) {
     try {
-      const result = await pool.query(
-        'SELECT id FROM auth.users WHERE email = $1',
-        [email]
-      );
+      // Use Supabase Auth to request password reset
+      const { error } = await supabase.auth.resetPasswordForEmail(email);
       
-      if (result.rows.length === 0) {
-        // Don't reveal that user doesn't exist
-        return { message: 'If an account with that email exists, a reset link has been sent.' };
+      if (error) {
+        logger.error('Password reset error:', error);
       }
       
-      // Here you would typically send an email with reset token
-      // For now, just log it
-      const resetToken = generateToken({ userId: result.rows[0].id, type: 'password_reset' }, '1h');
-      
-      logger.info('Password reset requested', { email, resetToken });
+      logger.info('Password reset requested', { email });
       
       return { message: 'If an account with that email exists, a reset link has been sent.' };
       

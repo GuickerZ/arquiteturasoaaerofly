@@ -1,4 +1,4 @@
-const { pool } = require('../config/database');
+const { supabase } = require('../config/supabase');
 const { generateBookingReference, generateSeatNumber, paginate, getPaginationMeta } = require('../utils/helpers');
 const logger = require('../utils/logger');
 

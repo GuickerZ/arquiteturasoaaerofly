@@ -1,4 +1,4 @@
-const { pool } = require('../config/database');
+const { supabase } = require('../config/supabase');
 const { hashPassword } = require('../utils/helpers');
 const logger = require('../utils/logger');
 
@@ -8,26 +8,34 @@ class UserService {
    */
   async getUserById(userId) {
     try {
-      const result = await pool.query(`
-        SELECT 
-          u.id,
-          u.email,
-          u.created_at,
-          p.full_name,
-          p.document,
-          p.phone,
-          p.birth_date,
-          p.nationality
-        FROM auth.users u
-        LEFT JOIN public.profiles p ON u.id = p.user_id
-        WHERE u.id = $1
-      `, [userId]);
+      // Get user from Supabase Auth
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
       
-      if (result.rows.length === 0) {
+      if (userError || !userData.user) {
         return null;
       }
       
-      return result.rows[0];
+      // Get profile data
+      const { data: profileData, error: profileError } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('user_id', userId)
+        .single();
+      
+      if (profileError && profileError.code !== 'PGRST116') {
+        logger.error('Profile fetch error:', profileError);
+      }
+      
+      return {
+        id: userData.user.id,
+        email: userData.user.email,
+        created_at: userData.user.created_at,
+        full_name: profileData?.full_name,
+        document: profileData?.document,
+        phone: profileData?.phone,
+        birth_date: profileData?.birth_date,
+        nationality: profileData?.nationality
+      };
       
     } catch (error) {
       logger.error('Get user by ID error:', error);
@@ -39,35 +47,30 @@ class UserService {
    * Update user profile
    */
   async updateProfile(userId, profileData) {
-    const client = await pool.connect();
-    
     try {
-      await client.query('BEGIN');
-      
       const { fullName, phone, birthDate, nationality } = profileData;
       
-      // Update profile
-      const result = await client.query(`
-        UPDATE public.profiles 
-        SET 
-          full_name = COALESCE($1, full_name),
-          phone = COALESCE($2, phone),
-          birth_date = COALESCE($3, birth_date),
-          nationality = COALESCE($4, nationality),
-          updated_at = NOW()
-        WHERE user_id = $5
-        RETURNING *
-      `, [fullName, phone, birthDate, nationality, userId]);
+      const updateData = {};
+      if (fullName !== undefined) updateData.full_name = fullName;
+      if (phone !== undefined) updateData.phone = phone;
+      if (birthDate !== undefined) updateData.birth_date = birthDate;
+      if (nationality !== undefined) updateData.nationality = nationality;
       
-      if (result.rows.length === 0) {
-        // Create profile if it doesn't exist
-        await client.query(`
-          INSERT INTO public.profiles (user_id, full_name, phone, birth_date, nationality)
-          VALUES ($1, $2, $3, $4, $5)
-        `, [userId, fullName, phone, birthDate, nationality]);
+      // Update profile using Supabase
+      const { data, error } = await supabase
+        .from('profiles')
+        .upsert({
+          user_id: userId,
+          ...updateData
+        }, {
+          onConflict: 'user_id'
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        throw new Error(`Profile update failed: ${error.message}`);
       }
-      
-      await client.query('COMMIT');
       
       logger.info('User profile updated', { userId });
       
@@ -75,11 +78,8 @@ class UserService {
       return await this.getUserById(userId);
       
     } catch (error) {
-      await client.query('ROLLBACK');
       logger.error('Update profile error:', error);
       throw error;
-    } finally {
-      client.release();
     }
   }
   
@@ -88,36 +88,21 @@ class UserService {
    */
   async changePassword(userId, currentPassword, newPassword) {
     try {
-      // Get current password hash
-      const userResult = await pool.query(`
-        SELECT encrypted_password
-        FROM auth.users
-        WHERE id = $1
-      `, [userId]);
+      // Get user from Supabase Auth
+      const { data: userData, error: userError } = await supabase.auth.admin.getUserById(userId);
       
-      if (userResult.rows.length === 0) {
+      if (userError || !userData.user) {
         throw new Error('User not found');
       }
       
-      const user = userResult.rows[0];
+      // Use Supabase Auth to update password
+      const { error: passwordError } = await supabase.auth.admin.updateUserById(userId, {
+        password: newPassword
+      });
       
-      // Verify current password
-      const bcrypt = require('bcryptjs');
-      const isValidPassword = await bcrypt.compare(currentPassword, user.encrypted_password);
-      
-      if (!isValidPassword) {
-        throw new Error('Current password is incorrect');
+      if (passwordError) {
+        throw new Error(`Password update failed: ${passwordError.message}`);
       }
-      
-      // Hash new password
-      const hashedNewPassword = await hashPassword(newPassword);
-      
-      // Update password
-      await pool.query(`
-        UPDATE auth.users 
-        SET encrypted_password = $1, updated_at = NOW()
-        WHERE id = $2
-      `, [hashedNewPassword, userId]);
       
       logger.info('Password changed successfully', { userId });
       
@@ -134,19 +119,35 @@ class UserService {
    */
   async getUserStatistics(userId) {
     try {
-      const result = await pool.query(`
-        SELECT 
-          COUNT(CASE WHEN b.status = 'confirmed' THEN 1 END) as confirmed_bookings,
-          COUNT(CASE WHEN b.status = 'completed' THEN 1 END) as completed_trips,
-          COUNT(CASE WHEN b.status = 'cancelled' THEN 1 END) as cancelled_bookings,
-          COALESCE(SUM(CASE WHEN b.status IN ('confirmed', 'completed') THEN b.total_price ELSE 0 END), 0) as total_spent,
-          COUNT(DISTINCT f.destination_airport_id) as cities_visited
-        FROM public.bookings b
-        LEFT JOIN public.flights f ON b.flight_id = f.id
-        WHERE b.user_id = $1
-      `, [userId]);
+      // Get user bookings
+      const { data: bookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select(`
+          status,
+          total_price,
+          flights!inner(destination_airport_id)
+        `)
+        .eq('user_id', userId);
       
-      return result.rows[0];
+      if (bookingsError) {
+        throw new Error(`Failed to get user statistics: ${bookingsError.message}`);
+      }
+      
+      const statistics = {
+        confirmed_bookings: bookings.filter(b => b.status === 'confirmed').length,
+        completed_trips: bookings.filter(b => b.status === 'completed').length,
+        cancelled_bookings: bookings.filter(b => b.status === 'cancelled').length,
+        total_spent: bookings
+          .filter(b => ['confirmed', 'completed'].includes(b.status))
+          .reduce((sum, b) => sum + parseFloat(b.total_price || 0), 0),
+        cities_visited: new Set(
+          bookings
+            .filter(b => ['confirmed', 'completed'].includes(b.status))
+            .map(b => b.flights.destination_airport_id)
+        ).size
+      };
+      
+      return statistics;
       
     } catch (error) {
       logger.error('Get user statistics error:', error);
@@ -158,42 +159,36 @@ class UserService {
    * Delete user account
    */
   async deleteAccount(userId) {
-    const client = await pool.connect();
-    
     try {
-      await client.query('BEGIN');
-      
       // Check for active bookings
-      const activeBookingsResult = await client.query(`
-        SELECT COUNT(*) as active_count
-        FROM public.bookings
-        WHERE user_id = $1 AND status IN ('pending', 'confirmed')
-      `, [userId]);
+      const { data: activeBookings, error: bookingsError } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('user_id', userId)
+        .in('status', ['pending', 'confirmed']);
       
-      const activeCount = parseInt(activeBookingsResult.rows[0].active_count);
+      if (bookingsError) {
+        throw new Error(`Failed to check active bookings: ${bookingsError.message}`);
+      }
       
-      if (activeCount > 0) {
+      if (activeBookings && activeBookings.length > 0) {
         throw new Error('Cannot delete account with active bookings');
       }
       
-      // Delete user data (cascade will handle related records)
-      await client.query(`
-        DELETE FROM auth.users
-        WHERE id = $1
-      `, [userId]);
+      // Delete user using Supabase Auth
+      const { error: deleteError } = await supabase.auth.admin.deleteUser(userId);
       
-      await client.query('COMMIT');
+      if (deleteError) {
+        throw new Error(`Failed to delete user: ${deleteError.message}`);
+      }
       
       logger.info('User account deleted', { userId });
       
       return { message: 'Account deleted successfully' };
       
     } catch (error) {
-      await client.query('ROLLBACK');
       logger.error('Delete account error:', error);
       throw error;
-    } finally {
-      client.release();
     }
   }
 }

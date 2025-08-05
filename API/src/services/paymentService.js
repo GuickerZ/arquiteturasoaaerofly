@@ -1,4 +1,4 @@
-const { pool } = require('../config/database');
+const { supabase } = require('../config/supabase');
 const { generatePixCode } = require('../utils/helpers');
 const logger = require('../utils/logger');
 const QRCode = require('qrcode');
