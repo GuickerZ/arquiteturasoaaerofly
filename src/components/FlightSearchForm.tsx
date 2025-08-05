@@ -9,11 +9,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Search, MapPin, Calendar as CalendarIcon, Users, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { mockAirports } from "@/lib/mockData";
+import { flightAPI } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 
 export const FlightSearchForm = () => {
   const navigate = useNavigate();
+  const [airports, setAirports] = useState<any[]>([]);
   const [formData, setFormData] = useState({
     origin: "",
     destination: "",
@@ -28,13 +29,29 @@ export const FlightSearchForm = () => {
   const [originSearch, setOriginSearch] = useState("");
   const [destinationSearch, setDestinationSearch] = useState("");
 
-  const filteredOriginAirports = mockAirports.filter(airport =>
+  // Load airports on component mount
+  useEffect(() => {
+    const loadAirports = async () => {
+      try {
+        const response = await flightAPI.getAirports();
+        setAirports(response.data || []);
+      } catch (error) {
+        console.error('Failed to load airports:', error);
+        // Fallback to empty array if API fails
+        setAirports([]);
+      }
+    };
+    
+    loadAirports();
+  }, []);
+
+  const filteredOriginAirports = airports.filter(airport =>
     airport.code.toLowerCase().includes(originSearch.toLowerCase()) ||
     airport.city.toLowerCase().includes(originSearch.toLowerCase()) ||
     airport.name.toLowerCase().includes(originSearch.toLowerCase())
   );
 
-  const filteredDestinationAirports = mockAirports.filter(airport =>
+  const filteredDestinationAirports = airports.filter(airport =>
     airport.code.toLowerCase().includes(destinationSearch.toLowerCase()) ||
     airport.city.toLowerCase().includes(destinationSearch.toLowerCase()) ||
     airport.name.toLowerCase().includes(destinationSearch.toLowerCase())

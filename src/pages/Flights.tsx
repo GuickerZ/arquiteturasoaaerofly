@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Flight, mockAPI, mockAirports } from "@/lib/mockData";
+import { flightAPI, Flight as ApiFlight, Airport } from "@/lib/api";
 import { Plane, Clock, MapPin, Users, ArrowRight, Filter } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -13,7 +13,8 @@ import { ptBR } from "date-fns/locale";
 const Flights = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const [flights, setFlights] = useState<Flight[]>([]);
+  const [flights, setFlights] = useState<ApiFlight[]>([]);
+  const [airports, setAirports] = useState<Airport[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortBy, setSortBy] = useState<"price" | "duration" | "departure">("price");
 
@@ -26,23 +27,38 @@ const Flights = () => {
     tripType: searchParams.get("tripType") || "one-way"
   };
 
-  const originAirport = mockAirports.find(a => a.code === searchData.origin);
-  const destinationAirport = mockAirports.find(a => a.code === searchData.destination);
+  const originAirport = airports.find(a => a.code === searchData.origin);
+  const destinationAirport = airports.find(a => a.code === searchData.destination);
+
+  useEffect(() => {
+    // Load airports first
+    const loadAirports = async () => {
+      try {
+        const response = await flightAPI.getAirports();
+        setAirports(response.data || []);
+      } catch (error) {
+        console.error('Failed to load airports:', error);
+      }
+    };
+    
+    loadAirports();
+  }, []);
 
   useEffect(() => {
     const searchFlights = async () => {
       setLoading(true);
       try {
-        const results = await mockAPI.flights.search({
+        const response = await flightAPI.search({
           origin: searchData.origin,
           destination: searchData.destination,
           departureDate: searchData.departureDate,
           returnDate: searchData.returnDate || undefined,
           passengers: searchData.passengers
         });
-        setFlights(results);
+        setFlights(response.data || []);
       } catch (error) {
         console.error("Erro ao buscar voos:", error);
+        setFlights([]);
       } finally {
         setLoading(false);
       }
@@ -51,7 +67,7 @@ const Flights = () => {
     if (searchData.origin && searchData.destination && searchData.departureDate) {
       searchFlights();
     }
-  }, [searchParams]);
+  }, [searchParams, searchData.origin, searchData.destination, searchData.departureDate, searchData.passengers, searchData.returnDate]);
 
   const sortedFlights = [...flights].sort((a, b) => {
     switch (sortBy) {
