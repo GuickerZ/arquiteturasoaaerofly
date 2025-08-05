@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect} from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -15,7 +15,7 @@ import { useNavigate } from "react-router-dom";
 export const FlightSearchForm = () => {
   const navigate = useNavigate();
   const [airports, setAirports] = useState<any[]>([]);
-  const [formData, setFormData] = useState({
+    const [formData, setFormData] = useState({
     origin: "",
     destination: "",
     departureDate: undefined as Date | undefined,
@@ -34,28 +34,33 @@ export const FlightSearchForm = () => {
     const loadAirports = async () => {
       try {
         const response = await flightAPI.getAirports();
-        setAirports(response.data || []);
+        console.log(response.data); // Verifique o formato dos dados
+        setAirports(response.data.airports || []); // Ajuste aqui para acessar response.data.airports
       } catch (error) {
         console.error('Failed to load airports:', error);
-        // Fallback to empty array if API fails
         setAirports([]);
       }
     };
-    
+  
     loadAirports();
   }, []);
+  
 
-  const filteredOriginAirports = airports.filter(airport =>
-    airport.code.toLowerCase().includes(originSearch.toLowerCase()) ||
-    airport.city.toLowerCase().includes(originSearch.toLowerCase()) ||
-    airport.name.toLowerCase().includes(originSearch.toLowerCase())
-  );
-
-  const filteredDestinationAirports = airports.filter(airport =>
-    airport.code.toLowerCase().includes(destinationSearch.toLowerCase()) ||
-    airport.city.toLowerCase().includes(destinationSearch.toLowerCase()) ||
-    airport.name.toLowerCase().includes(destinationSearch.toLowerCase())
-  );
+  const filteredOriginAirports = Array.isArray(airports)
+  ? airports.filter(airport =>
+      airport.code?.toLowerCase().includes(originSearch.toLowerCase()) ||
+      airport.city?.toLowerCase().includes(originSearch.toLowerCase()) ||
+      airport.name?.toLowerCase().includes(originSearch.toLowerCase())
+    )
+  : [];
+  
+  const filteredDestinationAirports = Array.isArray(airports)
+  ? airports.filter(airport =>
+    airport.code?.toLowerCase().includes(destinationSearch.toLowerCase()) ||
+    airport.city?.toLowerCase().includes(destinationSearch.toLowerCase()) ||
+    airport.name?.toLowerCase().includes(destinationSearch.toLowerCase())
+  )
+  : [];
 
   const handleSwapAirports = () => {
     setFormData(prev => ({
@@ -116,12 +121,12 @@ export const FlightSearchForm = () => {
               <MapPin className="w-4 h-4 inline mr-1" />
               Origem
             </Label>
-            <Popover open={showOriginList} onOpenChange={setShowOriginList}>
+            <Popover open={showOriginList} onOpenChange={(isOpen) => setShowOriginList(isOpen)}>
               <PopoverTrigger asChild>
                 <Input
                   id="origin"
                   placeholder="De onde?"
-                  value={originSearch}
+                  value={originSearch} // Controlado pelo estado
                   onChange={(e) => setOriginSearch(e.target.value)}
                   onFocus={() => setShowOriginList(true)}
                   className="cursor-pointer"
@@ -134,9 +139,9 @@ export const FlightSearchForm = () => {
                       key={airport.code}
                       className="px-4 py-3 hover:bg-accent cursor-pointer border-b transition-smooth"
                       onClick={() => {
-                        setFormData(prev => ({ ...prev, origin: airport.code }));
-                        setOriginSearch(`${airport.code} - ${airport.city}`);
-                        setShowOriginList(false);
+                        setFormData(prev => ({ ...prev, origin: airport.code })); // Atualiza o código do aeroporto
+                        setOriginSearch(`${airport.code} - ${airport.city}`); // Atualiza o texto exibido no campo
+                        setShowOriginList(false); // Fecha a lista de seleção
                       }}
                     >
                       <div className="font-medium">{airport.code} - {airport.city}</div>
@@ -166,7 +171,7 @@ export const FlightSearchForm = () => {
               <MapPin className="w-4 h-4 inline mr-1" />
               Destino
             </Label>
-            <Popover open={showDestinationList} onOpenChange={setShowDestinationList}>
+            <Popover open={showDestinationList} onOpenChange={(isOpen) => setShowDestinationList(isOpen)}>
               <PopoverTrigger asChild>
                 <Input
                   id="destination"

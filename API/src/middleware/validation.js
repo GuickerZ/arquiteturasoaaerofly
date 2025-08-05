@@ -127,5 +127,6 @@ module.exports = {
   validateBooking,
   validatePayment,
   validateUUID,
-  handleValidationErrors
+  handleValidationErrors,
+  body
 };
