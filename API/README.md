@@ -1,6 +1,6 @@
 # AeroFly API - Backend com Arquitetura SOA
 
-API REST completa para o sistema de reservas aéreas AeroFly, desenvolvida com Node.js, Express e PostgreSQL seguindo os princípios de Service-Oriented Architecture (SOA).
+API REST completa para o sistema de reservas aéreas AeroFly, desenvolvida com Node.js, Express e Supabase seguindo os princípios de Service-Oriented Architecture (SOA).
 
 ## 🏗️ Arquitetura SOA
 
@@ -10,7 +10,7 @@ O sistema foi estruturado seguindo os princípios SOA com separação clara de r
 
 1. **Controllers** - Camada de apresentação que gerencia requisições HTTP
 2. **Services** - Camada de lógica de negócio e regras de domínio
-3. **Database** - Camada de acesso a dados com PostgreSQL
+3. **Database** - Camada de acesso a dados com Supabase
 4. **Middleware** - Componentes transversais (auth, validação, logs)
 5. **Routes** - Definição e organização de endpoints
 
@@ -219,67 +219,5 @@ npm start
 - Métricas de performance
 - Logs de erro detalhados
 - Rastreamento de transações
-
-## 🧪 Testes
-
-### Executar Testes
-```bash
-npm test
-```
-
-### Tipos de Teste
-- Testes unitários dos services
-- Testes de integração das APIs
-- Testes de carga para endpoints críticos
-- Testes de segurança
-
-## 🚀 Deploy
-
-### Variáveis de Ambiente Necessárias
-```env
-NODE_ENV=production
-PORT=3001
-DB_HOST=seu-postgres-host
-DB_NAME=aerofly
-DB_USER=seu-usuario
-DB_PASSWORD=sua-senha
-JWT_SECRET=seu-jwt-secret-super-seguro
-PIX_API_KEY=sua-chave-pix
-```
-
-### Considerações de Produção
-- Usar HTTPS sempre
-- Configurar rate limiting adequado
-- Implementar cache Redis para sessões
-- Configurar backup automático do banco
-- Monitoramento com APM tools
-- Load balancer para alta disponibilidade
-
-## 📚 Documentação da API
-
-A documentação completa da API está disponível via Swagger/OpenAPI em:
-- Desenvolvimento: `http://localhost:3001/api-docs`
-- Produção: `https://api.aerofly.com/api-docs`
-
-## 🤝 Contribuição
-
-1. Fork o projeto
-2. Crie uma branch para sua feature
-3. Commit suas mudanças
-4. Push para a branch
-5. Abra um Pull Request
-
-## 📄 Licença
-
-Este projeto está sob a licença MIT. Veja o arquivo LICENSE para mais detalhes.
-
-## 🆘 Suporte
-
-Para dúvidas ou problemas:
-- Abra uma issue no GitHub
-- Contate o time de desenvolvimento
-- Consulte a documentação da API
-
----
 
 **AeroFly API** - Sistema completo de reservas aéreas com arquitetura SOA robusta e escalável.

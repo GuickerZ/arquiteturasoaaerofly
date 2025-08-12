@@ -188,13 +188,13 @@ const Home = () => {
               <div className="space-y-2 text-muted-foreground">
                 <p>📞 0800 123 4567</p>
                 <p>✉️ contato@aerofly.com</p>
-                <p>📍 São Paulo, SP - Brasil</p>
+                <p>📍 Garanhuns, PE - Brasil</p>
               </div>
             </div>
           </div>
           
           <div className="border-t mt-8 pt-8 text-center text-muted-foreground">
-            <p>&copy; 2024 AeroFly. Todos os direitos reservados.</p>
+            <p>&copy; 2025 AeroFly. Todos os direitos reservados ao 4 TI - TARDE.</p>
           </div>
         </div>
       </footer>
